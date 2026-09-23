@@ -29,6 +29,12 @@ springdoc:
     path: /swagger-ui.html
     operationsSorter: method
 
+ai:
+  enabled: ${AI_ENABLED:true}
+  gemini:
+    apiKey: "${GEMINI_API_KEY:}"
+    model: "${AI_GEMINI_MODEL:gemini-1.5-flash}"
+
 logging:
   level:
     com.luppo.farmacia: INFO

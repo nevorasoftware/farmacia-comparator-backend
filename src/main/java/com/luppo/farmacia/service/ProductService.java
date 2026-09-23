@@ -23,14 +23,24 @@ public class ProductService {
     private final SrsProductRepository srsProductRepository;
     private final SrsPriceRepository srsPriceRepository;
     private final ComparisonService comparisonService;
+    private final OnDemandScraperService onDemandScraperService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<ProductSearchDto> searchProducts(String query) {
         List<MasterProduct> products;
         if (query == null || query.trim().isEmpty()) {
             products = masterProductRepository.findAll();
         } else {
-            products = masterProductRepository.searchProducts(query.trim());
+            String cleanQuery = query.trim();
+            products = masterProductRepository.searchProducts(cleanQuery);
+
+            // Si no existe en la base de datos local, buscamos en tiempo real con scraping y normalizamos con Gemini
+            if (products.isEmpty() && cleanQuery.length() >= 3) {
+                int ingested = onDemandScraperService.scrapeAndIngest(cleanQuery);
+                if (ingested > 0) {
+                    products = masterProductRepository.searchProducts(cleanQuery);
+                }
+            }
         }
 
         return products.stream().map(this::mapToSearchDto).collect(Collectors.toList());
