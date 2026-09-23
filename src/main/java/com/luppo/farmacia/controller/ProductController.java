@@ -32,6 +32,12 @@ public class ProductController {
         return ResponseEntity.ok(productService.searchProducts(query));
     }
 
+    @GetMapping("/suggestions")
+    @Operation(summary = "Sugerencias de autocompletado", description = "Retorna nombres de productos que coinciden con el término")
+    public ResponseEntity<List<String>> getSuggestions(@RequestParam(value = "q", required = false) String query) {
+        return ResponseEntity.ok(productService.getSuggestions(query));
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Obtener medicamento por ID")
     public ResponseEntity<MasterProduct> getProductById(@PathVariable Long id) {

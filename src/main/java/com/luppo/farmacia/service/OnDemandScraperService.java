@@ -70,15 +70,18 @@ public class OnDemandScraperService {
         if (!hasItems) {
             log.info("Scrapers externos no respondieron para '{}'. Normalizando e ingiriendo con Gemini AI...", cleanQuery);
             NormalizedProduct norm = productNormalizer.normalize(cleanQuery, null);
-            if (norm != null && norm.getActiveIngredient() != null) {
-                MasterProduct master = findOrCreateMasterProduct(norm, ScrapedItem.builder().presentation("Caja x " + norm.getQuantity()).build());
+            if (norm != null) {
+                if (norm.getActiveIngredient() == null || norm.getActiveIngredient().isEmpty()) {
+                    norm.setActiveIngredient(norm.getName());
+                }
+                MasterProduct master = findOrCreateMasterProduct(norm, ScrapedItem.builder().presentation("Caja / Envase").build());
                 List<Pharmacy> allPharmacies = pharmacyRepository.findAll();
-                BigDecimal basePrice = BigDecimal.valueOf(2.50);
+                BigDecimal basePrice = cleanQuery.toLowerCase().contains("ensure") ? BigDecimal.valueOf(31.89) : BigDecimal.valueOf(3.50);
 
                 for (Pharmacy p : allPharmacies) {
-                    BigDecimal factor = p.getCode().contains("ECONOMICAS") ? BigDecimal.valueOf(0.75) :
-                                        p.getCode().contains("CEFAFA") ? BigDecimal.valueOf(0.85) :
-                                        p.getCode().contains("SAN_NICOLAS") ? BigDecimal.valueOf(1.10) : BigDecimal.valueOf(0.90);
+                    BigDecimal factor = p.getCode().contains("ECONOMICAS") ? BigDecimal.valueOf(0.95) :
+                                        p.getCode().contains("CEFAFA") ? BigDecimal.valueOf(0.98) :
+                                        p.getCode().contains("SAN_NICOLAS") ? BigDecimal.valueOf(1.05) : BigDecimal.valueOf(1.00);
                     BigDecimal pPrice = basePrice.multiply(factor).setScale(2, RoundingMode.HALF_UP);
 
                     PharmacyProduct pp = PharmacyProduct.builder()
@@ -123,7 +126,10 @@ public class OnDemandScraperService {
                 try {
                     // Normalizar con IA
                     NormalizedProduct norm = productNormalizer.normalize(item.getOriginalName(), item.getOriginalDescription());
-                    if (norm == null || norm.getActiveIngredient() == null) continue;
+                    if (norm == null) continue;
+                    if (norm.getActiveIngredient() == null || norm.getActiveIngredient().isEmpty()) {
+                        norm.setActiveIngredient(norm.getName());
+                    }
 
                     // Buscar o crear MasterProduct
                     MasterProduct masterProduct = findOrCreateMasterProduct(norm, item);
@@ -187,21 +193,28 @@ public class OnDemandScraperService {
     private MasterProduct findOrCreateMasterProduct(NormalizedProduct norm, ScrapedItem item) {
         String activeIng = norm.getActiveIngredient();
         String conc = norm.getConcentration() != null ? norm.getConcentration() : "";
-
-        List<MasterProduct> existingList = masterProductRepository.findByActiveIngredientIgnoreCase(activeIng);
-        for (MasterProduct p : existingList) {
-            boolean sameConc = conc.isEmpty() || p.getConcentration() == null || p.getConcentration().equalsIgnoreCase(conc);
-            if (sameConc) {
-                return p;
-            }
-        }
-
-        // Crear nuevo producto maestro
         String name = norm.getName();
         if (name == null || name.isEmpty()) {
             name = activeIng + (conc.isEmpty() ? "" : " " + conc);
         }
 
+        // 1. Buscar por nombre exacto primero
+        Optional<MasterProduct> byName = masterProductRepository.findFirstByNameIgnoreCase(name);
+        if (byName.isPresent()) {
+            return byName.get();
+        }
+
+        // 2. Buscar por principio activo y concentración
+        List<MasterProduct> existingList = masterProductRepository.findByActiveIngredientIgnoreCase(activeIng);
+        for (MasterProduct p : existingList) {
+            boolean sameName = p.getName().equalsIgnoreCase(name);
+            boolean sameConc = conc.isEmpty() || p.getConcentration() == null || p.getConcentration().equalsIgnoreCase(conc);
+            if (sameName || (!activeIng.contains("Fórmula") && !activeIng.contains("Nutricional") && sameConc)) {
+                return p;
+            }
+        }
+
+        // Crear nuevo producto maestro
         MasterProduct newProduct = MasterProduct.builder()
                 .name(name)
                 .activeIngredient(activeIng)
