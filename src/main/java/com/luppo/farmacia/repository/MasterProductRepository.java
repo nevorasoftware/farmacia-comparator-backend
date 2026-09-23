@@ -1,0 +1,17 @@
+package com.luppo.farmacia.repository;
+
+import com.luppo.farmacia.entity.MasterProduct;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import java.util.List;
+
+public interface MasterProductRepository extends JpaRepository<MasterProduct, Long> {
+    @Query("SELECT p FROM MasterProduct p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "OR LOWER(p.activeIngredient) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "OR LOWER(p.brand) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "OR LOWER(p.healthRegistration) LIKE LOWER(CONCAT('%', :query, '%'))")
+    List<MasterProduct> searchProducts(@Param("query") String query);
+
+    List<MasterProduct> findByActiveIngredientIgnoreCase(String activeIngredient);
+}
